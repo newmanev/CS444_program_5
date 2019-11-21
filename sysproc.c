@@ -130,21 +130,37 @@ sys_halt(void)
 }
 
 #ifdef KTHREADS
-# error You need to complete the following sys_kthread_ fucntions.
+// # error You need to complete the following sys_kthread_ fucntions.
 
 int
 sys_kthread_create(void)
 {
+	void *func;
+	void *arg_ptr;
+	void *tstack;
+
+	argptr(0,(void *) &func,sizeof(func));
+	argptr(1,(void *) &arg_ptr,sizeof(arg_ptr));
+	argptr(2,(void *) &tstack,sizeof(tstack));
+
+	return kthread_create(func, arg_ptr, tstack);
 }
 
 int
 sys_kthread_join(void)
 {
+	int tid;
+	argint(0, &tid);
+	return kthread_join(tid);
 }
 
 int
 sys_kthread_exit(void)
 {
+	int exitValue;
+	argint(0, &exitValue);
+	kthread_exit(exitValue);
+	return 0;
 }
 
 #endif // KTHREADS

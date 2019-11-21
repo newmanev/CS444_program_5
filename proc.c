@@ -117,7 +117,14 @@ found:
   p->context->eip = (uint)forkret;
 
 #ifdef KTHREADS
-# error You need to initialize new proc data memebers
+// # error You need to initialize new proc data memebers
+  p->oncpu = -1;
+  p->isThread = FALSE;
+  p->isParent = FALSE;
+  p->threadCount = 0;
+  p->tid = 0;
+  p->nextTid = 1;
+  p->threadExitvalue = -1;
 #endif // KTHREADS
 
   return p;
@@ -183,12 +190,83 @@ growproc(int n)
 }
 
 #ifdef KTHREADS
-# error You need to fill in the following functions
+// # error You need to fill in the following functions
 
 int
 kthread_create(void (*func)(void*), void *arg_ptr, void *tstack)
 {
-    int tid = -1;
+	int i;
+	int tid = -1;
+	struct proc *np;
+	struct proc *curproc = myproc();
+
+	if ((((ulong) tstack) % PGSIZE) != 0) {
+	  return -1;
+	}
+
+	// Allocate process.
+	if((np = allocproc()) == 0){
+		return -1;
+	}
+
+	// Copy process state from proc.
+	if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+		kfree(np->kstack);
+		np->kstack = 0;
+		np->state = UNUSED;
+		return -1;
+	}
+	np->pgdir = curproc->pgdir;
+	np->sz = curproc->sz;
+
+	np->isThread = TRUE;
+
+	if (curproc->isThread == TRUE){
+		np->parent = curproc->parent;
+		// curproc->parent->isParent = TRUE;
+		// curproc->parent->threadCount += 1;
+	} else{
+		np->parent = curproc;
+		curproc->isParent = TRUE;
+		curproc->threadCount += 1;
+	}
+
+	// np->isParent = FALSE;
+	// np->parent->isParent = TRUE;
+	// np->parent->threadCount += 1;
+
+	*np->tf = *curproc->tf;
+
+	// Clear %eax so that fork returns 0 in the child.
+	np->tf->eax = 0;
+
+	np->tf->eip = (uint)func;
+	np->tf->esp = ((int) tstack) + PGSIZE;
+	np->tf->esp -= sizeof(int);
+	*((int *) (np->tf->esp)) = (int) arg_ptr;
+
+	tid = np->parent->nextTid;
+	np->tid = tid;
+	np->parent->nextTid += 1;
+
+	np->tf->esp -= sizeof(int);
+	*((int *) (np->tf->esp)) = tid;
+
+	for(i = 0; i < NOFILE; i++)
+		if(curproc->ofile[i])
+	  		np->ofile[i] = filedup(curproc->ofile[i]);
+
+	np->cwd = idup(curproc->cwd);
+
+	safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  	// pid = np->pid;
+
+	acquire(&ptable.lock);
+
+	np->state = RUNNABLE;
+
+	release(&ptable.lock);
 
     return tid;
 }
@@ -197,13 +275,83 @@ int
 kthread_join(int tid)
 {
     int retValue = -1;
+  	struct proc *p;
+	struct proc *curproc = myproc();
 
+	if (curproc->isParent == TRUE && curproc->threadCount == 0) {
+		return -1;
+	}
+
+	if (tid == 0) {
+		return -1;
+	}
+
+	if (curproc->isThread == TRUE) {
+		curproc = curproc->parent;
+	}
+
+	acquire(&ptable.lock);
+
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+		if (p->parent != curproc || p->tid != tid) {
+			continue;
+		} else {
+			retValue = 0;
+		}
+
+		while (p->state != ZOMBIE) {
+			release(&ptable.lock);
+			yield();
+			acquire(&ptable.lock);
+		}
+
+		curproc->threadCount -= 1;
+
+		kfree(p->kstack);
+		p->kstack = 0;
+		p->pid = 0;
+		p->parent = 0;
+		p->name[0] = 0;
+		p->killed = 0;
+		p->state = UNUSED;
+
+		break;
+	}
+
+	release(&ptable.lock);
     return retValue;
 }
 
 void
 kthread_exit(int exitValue)
 {
+	int fd;
+	struct proc *curproc = myproc();
+
+	if (curproc->isThread == TRUE) {
+		for(fd = 0; fd < NOFILE; fd++){
+			if(curproc->ofile[fd]){
+		  		fileclose(curproc->ofile[fd]);
+		  		curproc->ofile[fd] = 0;
+			}
+		}
+	}
+
+	begin_op();
+	iput(curproc->cwd);
+	end_op();
+	curproc->cwd = 0;
+
+	curproc->killed = FALSE;
+	curproc->threadExitvalue = exitValue;
+	curproc->oncpu = -1;
+	curproc->state = ZOMBIE;
+
+	acquire(&ptable.lock);
+
+  	sched();
+	panic("kthread_exit");
+
     return;
 }
 
@@ -323,15 +471,15 @@ wait(void)
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
 #ifdef KTHREADS
-# error You will need to change how wait() kills off processes marked as zombie
-# error you do not want the kernel deallocating memory for a thread.
-# error you need to take care of that in kthread_join and benny_thread_exit
-# error kthread_join will call kfree() and benny_thread_exit will call free
-# error    on the memory allocated for the thread stack
-#else // KTHREADS
-      if(p->parent != curproc)
-#endif // KTHREADS
+// # error You will need to change how wait() kills off processes marked as zombie
+// # error you do not want the kernel deallocating memory for a thread.
+// # error you need to take care of that in kthread_join and benny_thread_exit
+// # error kthread_join will call kfree() and benny_thread_exit will call free
+// # error    on the memory allocated for the thread stack
+// #else // KTHREADS
+      if(p->parent != curproc || p->isThread == TRUE)
         continue;
+#endif // KTHREADS
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
@@ -390,7 +538,7 @@ scheduler(void)
         continue;
 
 #ifdef KTHREADS
-# error You need to have this data member in the proc struct
+// # error You need to have this data member in the proc struct
       p->oncpu = current_cpu;
 #endif // KTHREADS
 
@@ -579,7 +727,10 @@ sys_cps(void)
         "pid\tppid\tname\tstate\tsize"
         );
 #ifdef KTHREADS
-# error You need to add header info for the thread data
+// # error You need to add header info for the thread data
+	cprintf(
+		"\tcpu\tis par\tis thrd\tthrd #"
+		);
 #endif // KTHREADS
     cprintf("\n");
     for (i = 0; i < NPROC; i++) {
@@ -598,7 +749,16 @@ sys_cps(void)
                     , ptable.proc[i].sz
                 );
 #ifdef KTHREADS
-# error You need to add the thread data: oncpu, isParent, isThread, threadCount
+// # error You need to add the thread data: oncpu, isParent, isThread, threadCount
+			if (ptable.proc[i].oncpu >= 0) {
+				cprintf("\t%d", ptable.proc[i].oncpu);
+			} else {
+				cprintf("\t ");
+			}
+			cprintf("\t%d\t%d"
+					, ptable.proc[i].isThread == TRUE ? 1 : 0
+					, ptable.proc[i].threadCount
+				);
 #endif // KTHREADS
             cprintf("\n");
         }

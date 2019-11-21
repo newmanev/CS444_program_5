@@ -117,7 +117,10 @@ extern int sys_kdebug(void);
 extern int sys_halt(void);
 
 #ifdef KTHREADS
-# error You need to extern the sys_kthread calls here
+// # error You need to extern the sys_kthread calls here
+extern int sys_kthread_create(void);
+extern int sys_kthread_join(void);
+extern int sys_kthread_exit(void);
 #endif // KTHREADS
 
 static int (*syscalls[])(void) = {
@@ -156,7 +159,10 @@ static int (*syscalls[])(void) = {
 [SYS_halt] sys_halt,
 
 #ifdef KTHREADS
-# error You need to have the array entries for the sys_kthread_ calls here
+// # error You need to have the array entries for the sys_kthread_ calls here
+[SYS_kthread_create] sys_kthread_create,
+[SYS_kthread_join] sys_kthread_join,
+[SYS_kthread_exit] sys_kthread_exit,
 #endif // KTHREADS
 
 };

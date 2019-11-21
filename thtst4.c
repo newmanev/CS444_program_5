@@ -112,6 +112,10 @@ int
 main(int argc, char **argv)
 {
 #ifdef KTHREADS
+	printf(1, "WOWOW7\n");
+	printf(1, "WOWOW7\n");
+	printf(1, "WOWOW7\n");
+	printf(1, "WOWOW7\n");
     benny_thread_create(&(bt[0]), func1, (void *) 1);
 
     long_time(20);

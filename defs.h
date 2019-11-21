@@ -124,7 +124,10 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 #ifdef KTHREADS
-# error You need to have function prototypes for the kthread_ fucntions here
+// # error You need to have function prototypes for the kthread_ fucntions here
+int				kthread_create(void (*func)(void*), void *, void *);
+int				kthread_join(int);
+void			kthread_exit(int);
 #endif // KTHREADS
 
 // swtch.S

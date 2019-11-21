@@ -67,8 +67,8 @@ struct proc {
   char name[16];               // Process name (debugging)
 
 #ifdef KTHREADS
-# error you need to add a few data members into this space
-# error ooops, looks like the new date members are already down there
+// # error you need to add a few data members into this space
+// # error ooops, looks like the new date members are already down there
     int oncpu;
 
     ushort isThread;
