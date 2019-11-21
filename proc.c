@@ -223,8 +223,8 @@ kthread_create(void (*func)(void*), void *arg_ptr, void *tstack)
 
 	if (curproc->isThread == TRUE){
 		np->parent = curproc->parent;
-		// curproc->parent->isParent = TRUE;
-		// curproc->parent->threadCount += 1;
+		curproc->parent->isParent = TRUE;
+		curproc->parent->threadCount += 1;
 	} else{
 		np->parent = curproc;
 		curproc->isParent = TRUE;
@@ -295,8 +295,6 @@ kthread_join(int tid)
 	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
 		if (p->parent != curproc || p->tid != tid) {
 			continue;
-		} else {
-			retValue = 0;
 		}
 
 		while (p->state != ZOMBIE) {
@@ -315,6 +313,7 @@ kthread_join(int tid)
 		p->killed = 0;
 		p->state = UNUSED;
 
+		retValue = 0;
 		break;
 	}
 
